@@ -87,6 +87,22 @@ h2.pg{font-size:30px;margin:6px 0 2px}
 .seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.08)}
 .hscroll{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:4px 16px 8px;scroll-snap-type:x proximity}
 .hscroll::-webkit-scrollbar{display:none}
+.hcal{padding:12px 12px 10px}
+.hcal .mh{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.hcal .mh b{font-family:var(--serif);font-size:19px}
+.hcal .mh .ibtn{width:34px;height:34px}
+.hcal .g{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.hcal .wd{font-size:11px;font-weight:800;color:#8A8296;text-align:center;padding:2px 0 4px}
+.hcal .c{aspect-ratio:1/1;max-height:52px;border:0;border-radius:12px;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#C4BDCB;font-family:inherit;padding:0;position:relative}
+.hcal button.c{cursor:pointer}
+.hcal .c.td{background:#F3EADB;color:var(--ink)}
+.hcal .c.ot{background:#FAF5EC;color:#6A6275}
+.hcal .c.on{background:var(--ink);color:#fff}
+.hcal .c.now{box-shadow:inset 0 0 0 2px var(--gold)}
+.hcal .dots{display:flex;gap:2px;height:5px;margin-top:3px}
+.hcal .dots i{width:5px;height:5px;border-radius:50%;background:var(--jade)}
+.hcal .c.on .dots i{background:var(--gold)}
+.hchip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;background:#E1F2EE;color:#1F7A6E;padding:5px 10px;border-radius:999px;margin:0 6px 6px 0}
 .hres{gap:12px;align-items:stretch;scroll-snap-type:x mandatory}
 .hres>.hrc{flex:0 0 86%;max-width:420px;scroll-snap-align:center;margin:0}
 .hres>.hrc:only-child{flex-basis:100%}
@@ -790,6 +806,38 @@ function draw(){if(GM&&UI.view==='explore'&&UI.exTab==='Map'&&$('#gmap'))GM.keep
   {const strip=$('#dayStrip'),on=$('#dayStrip .dchip.on');if(strip&&on){const a=on.getBoundingClientRect(),b=strip.getBoundingClientRect();strip.scrollLeft+=(a.left-b.left)-(b.width-a.width)/2}}
 }
 
+function homeCal(days,cd,PF,matchT,F){
+  if(!days.length)return '<div class="card empty"><b>No days yet</b>Add trip dates in settings.</div>';
+  const has=iso=>days.some(d=>d.iso===iso);
+  let sel=F.D&&has(F.D)?F.D:(UI.hday&&has(UI.hday)?UI.hday:(cd||days.find(d=>!d.out)||days[0]).iso);
+  const months=[...new Set(days.map(d=>d.iso.slice(0,7)))].sort();
+  let mon=UI.hmon&&months.includes(UI.hmon)?UI.hmon:sel.slice(0,7);if(!months.includes(mon))mon=months[0];
+  const mi=months.indexOf(mon),pm=months[mi-1],nm=months[mi+1];
+  const [Y,M]=mon.split('-').map(Number);const first=new Date(Y,M-1,1),nd=new Date(Y,M,0).getDate();
+  const t=todayIso();let cells='';
+  for(let k=0;k<first.getDay();k++)cells+='<span></span>';
+  for(let dd=1;dd<=nd;dd++){const iso=`${mon}-${String(dd).padStart(2,'0')}`;const d=days.find(x=>x.iso===iso);
+    if(!d){cells+=`<span class="c x${iso===t?' now':''}">${dd}</span>`;continue}
+    const n=dayEvents(iso,PF).filter(matchT).length;
+    cells+=`<button class="c ${d.out?'ot':'td'}${iso===sel?' on':''}${iso===t?' now':''}" data-hday="${iso}" aria-label="${esc(fmtD(iso,{weekday:'long',month:'long',day:'numeric'}))}">${dd}<span class="dots">${'<i></i>'.repeat(Math.min(n,3))}</span></button>`}
+  const d=days.find(x=>x.iso===sel);const i=days.indexOf(d),pv=days[i-1],nx=days[i+1];
+  const evs=dayEvents(sel,PF).filter(matchT);
+  const st=S.reservations.filter(r=>r.category==='Hotel'&&r.status!=='Cancelled'&&r.date&&r.date<=sel&&(r.endDate?sel<r.endDate:sel===r.date)&&forPerson(r,PF));
+  const arrow=(x,dir)=>`<button class="ibtn" ${x?`data-hday="${x.iso}"`:'disabled style="opacity:.35"'} aria-label="${dir<0?'Previous':'Next'} day">${`<span style="display:inline-flex;${dir<0?'transform:rotate(180deg)':''}">${icon('arrow',16,2.2)}</span>`}</button>`;
+  return `<div class="card hcal">
+    <div class="mh"><button class="ibtn" ${pm?`data-hmon="${pm}"`:'disabled style="opacity:.35"'} aria-label="Previous month"><span style="display:inline-flex;transform:rotate(180deg)">${icon('arrow',15,2.2)}</span></button><b>${esc(first.toLocaleDateString('en-US',{month:'long',year:'numeric'}))}</b><button class="ibtn" ${nm?`data-hmon="${nm}"`:'disabled style="opacity:.35"'} aria-label="Next month">${icon('arrow',15,2.2)}</button></div>
+    <div class="g">${['S','M','T','W','T','F','S'].map(w=>`<span class="wd">${w}</span>`).join('')}${cells}</div>
+  </div>
+  <div class="hdet" id="hdet">
+    <div class="row" style="justify-content:space-between;align-items:center;margin:16px 0 8px;gap:10px">
+      <div class="grow">${d.title||d.out?`<div class="eyebrow">${d.title?fmtD(sel,{weekday:'long',month:'long',day:'numeric'}):''}${d.title&&d.out?' · ':''}${d.out?outLbl(d):''}</div>`:''}<h3 style="font-family:var(--serif);font-size:22px;margin:2px 0 0;line-height:1.15">${esc(dayLabel(d))}</h3>${d.summary?`<div class="muted small">${esc(d.summary)}</div>`:''}</div>
+      <div class="row" style="gap:6px;flex:none">${arrow(pv,-1)}${arrow(nx,1)}</div>
+    </div>
+    ${st.map(r=>{const N=r.endDate?Math.round((pd(r.endDate)-pd(r.date))/864e5):1;const k=Math.round((pd(sel)-pd(r.date))/864e5)+1;return `<div class="hchip">${icon('bed',13)} Tonight: ${esc(r.title)}${N>1?` · night ${k} of ${N}`:''}</div>`}).join('')}
+    <div class="tl" style="margin-top:8px">${evs.map(e=>evCard(e)).join('')||`<div class="card empty"><b>Free day</b>Nothing planned${PF!=='Everyone'?' for '+esc(PF):''} yet.</div>`}</div>
+    <div class="row" style="margin-top:12px;gap:8px"><button class="btn sm" data-go="plan" data-day="${sel}">Open in itinerary ${icon('arrow',16)}</button><button class="btn light sm" data-act="wallpaper" data-day="${sel}">${icon('phone',15)} Wallpaper</button></div>
+  </div>`;
+}
 function vHome(){
   const t=S.trip,days=tripDays(),cd=currentDay(days);
   const n=tripLen()||days.length;let tag='';
@@ -808,7 +856,6 @@ function vHome(){
       <div style="margin-top:10px">${evs.slice(0,4).map(e=>`<div class="row" style="padding:8px 0;border-top:1px solid var(--line)"><b style="width:62px;font-size:13px;flex:none">${esc(e.allDay?'All day':fmtT(e.time)||'—')}${e.tz&&e.time?`<small class="tzs" style="display:block;color:var(--jade);font-size:10px">${esc(tzAbbr(e.tz,e.date))}</small>`:''}</b><span class="grow trunc">${esc(e.title)}</span>${whoChip(e.people,20,3)}</div>`).join('')||`<div class="muted small">${fActive?'Nothing matches your filters on this day.':'Nothing planned yet.'}</div>`}</div>
       <div class="row" style="margin-top:10px"><button class="btn sm" data-go="plan" data-day="${nextDay.iso}">Open day ${icon('arrow',16)}</button>${evs.length>4?`<span class="muted small">+${evs.length-4} more</span>`:''}</div></div>`})():'';
   const stays=fActive?filterRes(F):S.reservations.filter(r=>['Hotel','Flight'].includes(r.category)).sort(byRes);
-  const hdays=days.filter(d=>(!F.D||d.iso===F.D)&&(F.P==='All'||dayEvents(d.iso,PF).length)&&(F.T==='All'||S.reservations.some(r=>rcat(r)===F.T&&resDates(r).has(d.iso)&&(F.P==='All'||!(r.people||[]).length||(r.people||[]).includes(F.P)))));
   return `
   <section class="hero">
     <div class="top"><span class="eyebrow" style="color:var(--gold2)">${esc(t.subtitle||'Trip plan')}</span><button class="ibtn" data-act="settings" aria-label="Trip settings">${icon('gear',18)}</button></div>
@@ -832,7 +879,7 @@ function vHome(){
       <div class="card pad">${(t.overview||[]).length?`<ul style="margin:0;padding-left:18px;display:grid;gap:6px">${t.overview.map(o=>`<li>${esc(o)}</li>`).join('')}</ul>`:'<span class="muted">Add highlights in settings.</span>'}
         ${t.tips?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)"><div class="eyebrow" style="margin-bottom:4px">Good to know</div><div class="small" style="color:#4C4659">${esc(t.tips)}</div></div>`:''}</div>
       <div class="sec"><h3>Days</h3><button class="link" data-go="plan">Full itinerary ${icon('arrow',15)}</button></div>
-      <div class="daygrid">${hdays.map(d=>`<button class="dayc ${d.iso===todayIso()?'today':''}" data-go="plan" data-day="${d.iso}"><span class="dnum"><span>${fmtD(d.iso,{weekday:'short'})}</span><b>${pd(d.iso).getDate()}</b></span><span class="grow">${d.title||d.out?`<span class="eyebrow">${d.title?fmtD(d.iso,{month:'long',day:'numeric'}):''}${d.title&&d.out?' · ':''}${d.out?outLbl(d):''}</span>`:''}<b style="display:block;font-size:15.5px">${esc(dayLabel(d))}</b><span class="muted small" style="display:block">${esc(d.summary)}</span>${(()=>{const it=dayEvents(d.iso,PF);if(!it.length)return'';const all=it.some(e=>!(e.people||[]).length);return `<span style="display:block;margin-top:6px">${whoChip(all?[]:[...new Set(it.flatMap(e=>e.people||[]))],18,5)}</span>`})()}</span></button>`).join('')||(fActive?'<div class="card empty"><b>No matching days</b>Try clearing a filter.</div>':'<div class="card empty"><b>No days yet</b>Add trip dates in settings.</div>')}</div>
+      ${homeCal(days,cd,PF,matchT,F)}
     </div>
     <div>
       <div class="sec"><h3>${fActive?(F.T!=='All'?esc(RPLURAL[F.T]||F.T):'Bookings'):'Flights & stays'}</h3><button class="link" data-go="info">All bookings ${icon('arrow',15)}</button></div>
@@ -1932,6 +1979,8 @@ document.addEventListener('click',e=>{
   const po=e.target.closest('[data-pkowner]');if(po){UI.pkOwner=po.dataset.pkowner;render();return}
   const cu=e.target.closest('[data-cur]');if(cu){UI.cur=cu.dataset.cur;LS.set('bkk-cur',UI.cur);render();return}
   const hr=e.target.closest('[data-homeres]');if(hr){UI.homeRes=hr.dataset.homeres;LS.set('bkk-homeres',UI.homeRes);UI._resScroll=true;render();return}
+  const hd=e.target.closest('[data-hday]');if(hd){UI.hday=hd.dataset.hday;UI.hmon=UI.hday.slice(0,7);const y=window.scrollY;render();window.scrollTo(0,y);return}
+  const hm=e.target.closest('[data-hmon]');if(hm){UI.hmon=hm.dataset.hmon;const y=window.scrollY;render();window.scrollTo(0,y);return}
   const me=e.target.closest('[data-me]');if(me){UI.me=UI.me===me.dataset.me?'':me.dataset.me;LS.set('bkk-me',UI.me);render();return}
   const pk=e.target.closest('[data-pack]');if(pk){const p=S.packing.find(x=>x.id===pk.dataset.pack);if(p&&!S.readonly)Store.put('packing',{...p,packed:!p.packed});return}
   const d2p=e.target.closest('[data-doc2pack]');if(d2p){e.stopPropagation();if(S.readonly){toast('View-only access');return}const id=d2p.dataset.doc2pack;
