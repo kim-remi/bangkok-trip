@@ -1,0 +1,21 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null && request.auth.token.email_verified == true; }
+    function email() { return request.auth.token.email.lower(); }
+    // The trip owner: the only person who can change who has access.
+    function isOwner() { return signedIn() && email() == 'OWNER_EMAIL'; }
+    function allowed() {
+      return isOwner() || (signedIn() &&
+        exists(/databases/$(database)/documents/config/access) &&
+        email() in get(/databases/$(database)/documents/config/access).data.emails);
+    }
+    match /config/access {
+      allow read: if allowed();
+      allow write: if isOwner();
+    }
+    match /{col}/{id} {
+      allow read, write: if col != 'config' && allowed();
+    }
+  }
+}
