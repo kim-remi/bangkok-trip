@@ -828,13 +828,13 @@ function vHome(){
   <div class="homecols">
     <div>
       ${upNext?`<div class="sec"><h3>${F.D?fmtD(F.D,{weekday:'long'}):cd&&cd.iso===todayIso()?'Today':'First up'}</h3>${F.P!=='All'?`<span class="who">${avatar(F.P,20)} ${esc(F.P)}’s plan</span>`:''}</div>${upNext}`:''}
+      <div class="sec"><h3>Trip overview</h3>${S.readonly?'':`<button class="link" data-act="settings">${icon('edit',14)} Edit</button>`}</div>
+      <div class="card pad">${(t.overview||[]).length?`<ul style="margin:0;padding-left:18px;display:grid;gap:6px">${t.overview.map(o=>`<li>${esc(o)}</li>`).join('')}</ul>`:'<span class="muted">Add highlights in settings.</span>'}
+        ${t.tips?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)"><div class="eyebrow" style="margin-bottom:4px">Good to know</div><div class="small" style="color:#4C4659">${esc(t.tips)}</div></div>`:''}</div>
       <div class="sec"><h3>Days</h3><button class="link" data-go="plan">Full itinerary ${icon('arrow',15)}</button></div>
       <div class="daygrid">${hdays.map(d=>`<button class="dayc ${d.iso===todayIso()?'today':''}" data-go="plan" data-day="${d.iso}"><span class="dnum"><span>${fmtD(d.iso,{weekday:'short'})}</span><b>${pd(d.iso).getDate()}</b></span><span class="grow">${d.title||d.out?`<span class="eyebrow">${d.title?fmtD(d.iso,{month:'long',day:'numeric'}):''}${d.title&&d.out?' · ':''}${d.out?outLbl(d):''}</span>`:''}<b style="display:block;font-size:15.5px">${esc(dayLabel(d))}</b><span class="muted small" style="display:block">${esc(d.summary)}</span>${(()=>{const it=dayEvents(d.iso,PF);if(!it.length)return'';const all=it.some(e=>!(e.people||[]).length);return `<span style="display:block;margin-top:6px">${whoChip(all?[]:[...new Set(it.flatMap(e=>e.people||[]))],18,5)}</span>`})()}</span></button>`).join('')||(fActive?'<div class="card empty"><b>No matching days</b>Try clearing a filter.</div>':'<div class="card empty"><b>No days yet</b>Add trip dates in settings.</div>')}</div>
     </div>
     <div>
-      <div class="sec"><h3>Trip overview</h3>${S.readonly?'':`<button class="link" data-act="settings">${icon('edit',14)} Edit</button>`}</div>
-      <div class="card pad">${(t.overview||[]).length?`<ul style="margin:0;padding-left:18px;display:grid;gap:6px">${t.overview.map(o=>`<li>${esc(o)}</li>`).join('')}</ul>`:'<span class="muted">Add highlights in settings.</span>'}
-        ${t.tips?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)"><div class="eyebrow" style="margin-bottom:4px">Good to know</div><div class="small" style="color:#4C4659">${esc(t.tips)}</div></div>`:''}</div>
       <div class="sec"><h3>${fActive?(F.T!=='All'?esc(RPLURAL[F.T]||F.T):'Bookings'):'Flights & stays'}</h3><button class="link" data-go="info">All bookings ${icon('arrow',15)}</button></div>
       ${(()=>{const tab=UI.homeRes==='Hotel'?'Hotel':'Flight';const nF=stays.filter(r=>r.category==='Flight').length,nH=stays.filter(r=>r.category==='Hotel').length;
         const list=fActive?stays:stays.filter(r=>r.category===tab);const t=todayIso();const up=list.findIndex(r=>(r.endDate||r.arrDate||r.date||'9')>=t);

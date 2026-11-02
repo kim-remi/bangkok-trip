@@ -1,5 +1,5 @@
 // Offline support. Bump VERSION on every release so phones pick up the new files.
-const VERSION = 'bkk-2026-11-01-4';
+const VERSION = 'bkk-2026-11-01-5';
 const SHELL = ['./', './index.html', './standalone.js', './firebase-config.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
 const FB = 'https://www.gstatic.com/firebasejs/10.14.1/';
