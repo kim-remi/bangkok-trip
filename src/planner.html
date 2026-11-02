@@ -246,6 +246,16 @@ h2.pg{font-size:30px;margin:6px 0 2px}
 .gmleg{display:flex;flex-wrap:wrap;gap:6px 14px;padding:10px 14px;font-size:11.5px;font-weight:700;color:var(--muted);border-top:1px solid var(--line)}
 .gmleg i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
 .gmleg i.hol{background:#fff;border:2px dashed #9B917F;width:8px;height:8px}
+.daystrip{position:sticky;top:0;z-index:12;background:var(--bg);margin:8px -16px 0;padding:calc(env(safe-area-inset-top) + 2px) 16px 0;box-shadow:0 8px 10px -10px rgba(30,27,46,.15)}
+.daystrip .hscroll{margin:0 -16px;padding:4px 16px 10px}
+.dchip.istoday:not(.on){border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold)}
+.daynav{display:flex;gap:8px;margin:10px 0}
+.dnbtn{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:9px 10px;font-weight:700;font-size:13px;color:var(--ink);min-width:0}
+.dnbtn span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dnbtn:first-child svg{transform:rotate(180deg)}
+.dnbtn.today{flex:none;background:var(--gold);border-color:var(--gold);color:#2A1A05;padding:9px 14px}
+.dnbtn[disabled]{opacity:.4}
+@media (min-width:900px){.daystrip{margin:8px -40px 0;padding:6px 40px 0}.daystrip .hscroll{margin:0 -40px;padding:4px 40px 10px}}
 /* packing */
 .pk{display:flex;align-items:center;gap:12px;padding:12px 14px;width:100%;text-align:left;background:none;border:0}
 .pk+.pk{border-top:1px solid var(--line)}
@@ -447,7 +457,7 @@ const DEFAULT_TRIP={title:'Bangkok',subtitle:'',start:'',end:'',travelers:[],bas
 const COLS=['events','days','places','reservations','docs','packing','expenses','payments','albums'];
 const S={trip:{...DEFAULT_TRIP},mode:'loading',ready:false,stale:false,readonly:false};
 COLS.forEach(c=>S[c]=[]);
-const UI={view:'home',day:null,exTab:'Activity',infoTab:'bookings',filter:LS.get('bkk-filter','Everyone'),me:LS.get('bkk-me',''),cur:LS.get('bkk-cur',''),pkOwner:'All'};
+const UI={view:'home',day:LS.get('bkk-day',null),exTab:'Activity',infoTab:'bookings',filter:LS.get('bkk-filter','Everyone'),me:LS.get('bkk-me',''),cur:LS.get('bkk-cur',''),pkOwner:'All'};
 let DB=null;
 
 const travelers=()=>Array.isArray(S.trip.travelers)?S.trip.travelers.filter(Boolean):[];
@@ -558,7 +568,7 @@ function tripDays(){
   else if(t.start)set.add(t.start);
   allItems().forEach(e=>e.date&&set.add(e.date));
   const st=t.start?pd(t.start):null;const len=tripLen();
-  return[...set].sort().map((iso,i)=>{const m=S.days.find(x=>x.id===iso)||{};const n=st?Math.round((pd(iso)-st)/864e5)+1:i+1;const out=st&&(n<1||(len&&n>len));return{iso,n,out,lab:out?'Travel day':`Day ${n}`,title:m.title||'',summary:m.summary||''}});
+  return[...set].sort().map((iso,i)=>{const m=S.days.find(x=>x.id===iso)||{};const n=st?Math.round((pd(iso)-st)/864e5)+1:i+1;const out=st&&(n<1||(len&&n>len));return{iso,n,out,lab:fmtD(iso,{weekday:'long',month:'long',day:'numeric'}),title:m.title||'',summary:m.summary||''}});
 }
 const tkey=e=>e.allDay?'00:00':(e.time||'99');
 const byTime=(a,b)=>(a.date||'9').localeCompare(b.date||'9')||tkey(a).localeCompare(tkey(b));
@@ -731,15 +741,16 @@ function draw(){if(GM&&UI.view==='explore'&&UI.exTab==='Map'&&$('#gmap'))GM.keep
   const fab=$('#fab');if(fab)fab.remove();
   if(UI.view==='money'&&!S.readonly){document.body.insertAdjacentHTML('beforeend',`<button class="fab" id="fab" data-act="addExpense">${icon('plus',20,2.4)} Add expense</button>`)}
   $$('canvas.sky').forEach(c=>paintHeroSky(c));
+  if(UI._slide&&UI.view==='plan'){const el=$('.dayhead');const tl=$('.tl');[el,tl].forEach(x=>x&&x.animate([{opacity:.3,transform:`translateX(${UI._slide==='l'?40:-40}px)`},{opacity:1,transform:'none'}],{duration:220,easing:'ease-out'}));UI._slide=null}
   $$('.fl-sc').forEach(sc=>{const on=$('.pchip.on',sc);if(!on)return;const a=on.getBoundingClientRect(),b=sc.getBoundingClientRect();if(a.right>b.right||a.left<b.left)sc.scrollLeft+=(a.left-b.left)-(b.width-a.width)/2});
-  const on=$('.dchip.on');if(on&&on.scrollIntoView&&UI._scrollChip){on.scrollIntoView({inline:'center',block:'nearest'});UI._scrollChip=false}
+  {const strip=$('#dayStrip'),on=$('#dayStrip .dchip.on');if(strip&&on){const a=on.getBoundingClientRect(),b=strip.getBoundingClientRect();strip.scrollLeft+=(a.left-b.left)-(b.width-a.width)/2}}
 }
 
 function vHome(){
   const t=S.trip,days=tripDays(),cd=currentDay(days);
   const n=tripLen()||days.length;let tag='';
   if(t.start){const diff=Math.round((pd(t.start)-pd(todayIso()))/864e5);const end=t.end||t.start;
-    if(diff>0)tag=`${diff} day${diff>1?'s':''} to go`;else if(todayIso()<=end){const td=days.find(d=>d.iso===todayIso());tag=td&&!td.out?`Day ${td.n} of ${n}`:'On the trip'}else tag='Trip complete';}
+    if(diff>0)tag=`${diff} day${diff>1?'s':''} to go`;else if(todayIso()<=end){const td=days.find(d=>d.iso===todayIso());const left=Math.round((pd(end)-pd(todayIso()))/864e5);tag=left>0?`On the trip · ${left} day${left>1?'s':''} left`:'Last day of the trip'}else tag='Trip complete';}
   const range=t.start?`${fmtD(t.start,{month:'short',day:'numeric'})}${t.end&&t.end!==t.start?' – '+fmtD(t.end,{month:'short',day:'numeric',year:'numeric'}):', '+pd(t.start).getFullYear()}`:'Add your dates';
   const setup=!t.start&&!travelers().length&&!S.events.length;
   const F=bkFilters();const fActive=(F.P!=='All')+(F.T!=='All')+(!!F.D);const PF=F.P==='All'?'Everyone':F.P;
@@ -748,7 +759,7 @@ function vHome(){
   const nextDay=F.D?days.find(d=>d.iso===F.D):(fActive&&base0?(days.find(d=>d.iso>=base0.iso&&dayEvents(d.iso,PF).some(matchT))||base0):base0);
   const upNext=nextDay?(()=>{const evs=dayEvents(nextDay.iso,PF).filter(matchT);const isToday=nextDay.iso===todayIso();
     return `<div class="card pad">
-      <div class="row"><div class="grow"><div class="eyebrow">${F.D?'Selected day':isToday?'Today':'Up next'} · ${nextDay.lab} · ${fmtD(nextDay.iso)}</div><h3 style="font-size:22px;margin-top:3px">${esc(dayLabel(nextDay))}</h3></div>
+      <div class="row"><div class="grow"><div class="eyebrow">${F.D?'Selected day':isToday?'Today':'Up next'}${nextDay.title?' · '+fmtD(nextDay.iso):''}${nextDay.out?' · Travel day':''}</div><h3 style="font-size:22px;margin-top:3px">${esc(dayLabel(nextDay))}</h3></div>
       <button class="ibtn" data-act="wallpaper" data-day="${nextDay.iso}" title="Lock-screen wallpaper">${icon('phone',19)}</button></div>
       <div style="margin-top:10px">${evs.slice(0,4).map(e=>`<div class="row" style="padding:8px 0;border-top:1px solid var(--line)"><b style="width:62px;font-size:13px;flex:none">${esc(e.allDay?'All day':fmtT(e.time)||'—')}${e.tz&&e.time?`<small class="tzs" style="display:block;color:var(--jade);font-size:10px">${esc(tzAbbr(e.tz,e.date))}</small>`:''}</b><span class="grow trunc">${esc(e.title)}</span>${whoChip(e.people,20,3)}</div>`).join('')||`<div class="muted small">${fActive?'Nothing matches your filters on this day.':'Nothing planned yet.'}</div>`}</div>
       <div class="row" style="margin-top:10px"><button class="btn sm" data-go="plan" data-day="${nextDay.iso}">Open day ${icon('arrow',16)}</button>${evs.length>4?`<span class="muted small">+${evs.length-4} more</span>`:''}</div></div>`})():'';
@@ -772,7 +783,7 @@ function vHome(){
     <div>
       ${upNext?`<div class="sec"><h3>${F.D?fmtD(F.D,{weekday:'long'}):cd&&cd.iso===todayIso()?'Today':'First up'}</h3>${F.P!=='All'?`<span class="who">${avatar(F.P,20)} ${esc(F.P)}’s plan</span>`:''}</div>${upNext}`:''}
       <div class="sec"><h3>Days</h3><button class="link" data-go="plan">Full itinerary ${icon('arrow',15)}</button></div>
-      <div class="daygrid">${hdays.map(d=>`<button class="dayc ${d.iso===todayIso()?'today':''}" data-go="plan" data-day="${d.iso}"><span class="dnum"><span>${fmtD(d.iso,{weekday:'short'})}</span><b>${pd(d.iso).getDate()}</b></span><span class="grow"><span class="eyebrow">${d.lab}</span><b style="display:block;font-size:15.5px">${esc(dayLabel(d))}</b><span class="muted small" style="display:block">${esc(d.summary)}</span>${(()=>{const it=dayEvents(d.iso,PF);if(!it.length)return'';const all=it.some(e=>!(e.people||[]).length);return `<span style="display:block;margin-top:6px">${whoChip(all?[]:[...new Set(it.flatMap(e=>e.people||[]))],18,5)}</span>`})()}</span></button>`).join('')||(fActive?'<div class="card empty"><b>No matching days</b>Try clearing a filter.</div>':'<div class="card empty"><b>No days yet</b>Add trip dates in settings.</div>')}</div>
+      <div class="daygrid">${hdays.map(d=>`<button class="dayc ${d.iso===todayIso()?'today':''}" data-go="plan" data-day="${d.iso}"><span class="dnum"><span>${fmtD(d.iso,{weekday:'short'})}</span><b>${pd(d.iso).getDate()}</b></span><span class="grow">${d.title||d.out?`<span class="eyebrow">${d.title?fmtD(d.iso,{month:'long',day:'numeric'}):''}${d.title&&d.out?' · ':''}${d.out?'Travel day':''}</span>`:''}<b style="display:block;font-size:15.5px">${esc(dayLabel(d))}</b><span class="muted small" style="display:block">${esc(d.summary)}</span>${(()=>{const it=dayEvents(d.iso,PF);if(!it.length)return'';const all=it.some(e=>!(e.people||[]).length);return `<span style="display:block;margin-top:6px">${whoChip(all?[]:[...new Set(it.flatMap(e=>e.people||[]))],18,5)}</span>`})()}</span></button>`).join('')||(fActive?'<div class="card empty"><b>No matching days</b>Try clearing a filter.</div>':'<div class="card empty"><b>No days yet</b>Add trip dates in settings.</div>')}</div>
     </div>
     <div>
       <div class="sec"><h3>Trip overview</h3>${S.readonly?'':`<button class="link" data-act="settings">${icon('edit',14)} Edit</button>`}</div>
@@ -798,15 +809,19 @@ function personFilter(){
 function vPlan(){
   const days=tripDays();
   if(!days.length)return `<h2 class="pg">Itinerary</h2><div class="card empty" style="margin-top:14px"><b>No days yet</b>Set your trip dates to build the itinerary.<div style="margin-top:12px"><button class="btn gold" data-act="settings">Set dates</button></div></div>`;
+  if(!UI._dayInit){UI._dayInit=true;const t=todayIso();if(days.some(x=>x.iso===t)&&!location.hash.startsWith('#day-'))UI.day=t}
   if(!UI.day||!days.some(d=>d.iso===UI.day)){const cd=currentDay(days);UI.day=(cd||days[0]).iso}
   const d=days.find(x=>x.iso===UI.day);const evs=dayEvents(d.iso,UI.filter);
   const unsched=S.events.filter(e=>!e.date);
   const now=new Date(),isToday=d.iso===todayIso(),nowT=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
   return `
   <div class="row" style="justify-content:space-between"><h2 class="pg">Itinerary</h2>${S.readonly?'':`<button class="btn sm gold" data-act="addEvent" data-day="${d.iso}">${icon('plus',15,2.4)} Add</button>`}</div>
-  <div class="hscroll" style="margin-top:8px">${days.map(x=>`<button class="dchip ${x.iso===d.iso?'on':''}" data-day-pick="${x.iso}"><small>${fmtD(x.iso,{weekday:'short'})}</small><b>${pd(x.iso).getDate()}</b><em>${x.out?'Travel':'Day '+x.n}</em></button>`).join('')}</div>
+  <div class="daystrip"><div class="hscroll" id="dayStrip">${days.map(x=>`<button class="dchip ${x.iso===d.iso?'on':''} ${x.iso===todayIso()?'istoday':''}" data-day-pick="${x.iso}"><small>${fmtD(x.iso,{weekday:'short'})}</small><b>${pd(x.iso).getDate()}</b><em>${x.out?'Travel':fmtD(x.iso,{month:'short'})}</em></button>`).join('')}</div></div>
+  ${(()=>{const i=days.findIndex(x=>x.iso===d.iso),pv=days[i-1],nx=days[i+1],t=todayIso(),hasT=days.some(x=>x.iso===t)&&t!==d.iso;
+    const lab=x=>fmtD(x.iso,{weekday:'short',month:'short',day:'numeric'});
+    return `<div class="daynav"><button class="dnbtn" ${pv?`data-day-pick="${pv.iso}"`:'disabled'} aria-label="Previous day">${icon('arrow',16,2.2)}<span>${pv?esc(lab(pv)):'Start'}</span></button>${hasT?`<button class="dnbtn today" data-day-pick="${t}">Today</button>`:''}<button class="dnbtn nx" ${nx?`data-day-pick="${nx.iso}"`:'disabled'} aria-label="Next day"><span>${nx?esc(lab(nx)):'End'}</span>${icon('arrow',16,2.2)}</button></div>`})()}
   <section class="dayhead">
-    <div class="eyebrow">${d.lab} · ${fmtD(d.iso,{weekday:'long',month:'long',day:'numeric'})}</div>
+    ${d.title||d.out?`<div class="eyebrow">${d.title?fmtD(d.iso,{weekday:'long',month:'long',day:'numeric'}):''}${d.title&&d.out?' · ':''}${d.out?'Travel day':''}</div>`:''}
     <h2>${esc(dayLabel(d))}</h2>${d.summary?`<p>${esc(d.summary)}</p>`:''}
     ${(()=>{const st=S.reservations.filter(r=>r.category==='Hotel'&&r.status!=='Cancelled'&&r.date&&r.date<=d.iso&&(r.endDate?d.iso<r.endDate:d.iso===r.date)&&(UI.filter==='Everyone'||!(r.people||[]).length||(r.people||[]).includes(UI.filter)));
       return st.map(r=>{const N=r.endDate?Math.round((pd(r.endDate)-pd(r.date))/864e5):1;const k=Math.round((pd(d.iso)-pd(r.date))/864e5)+1;return `<div class="tzchip" style="margin-right:6px">${icon('bed',13)} Tonight: ${esc(r.title)}${N>1?` · night ${k} of ${N}`:''}</div>`}).join('')})()}
@@ -886,7 +901,7 @@ function vExplore(){
     const K=KINDS[k];const pt=p=>p.title||p.name||'';const list=S.places.filter(p=>(p.kind||'Activity')===k).sort((a,b)=>(a.day||'9').localeCompare(b.day||'9')||pt(a).localeCompare(pt(b)));
     const days=tripDays();
     body=`<div class="grid2" style="margin-top:14px">${list.map(p=>{const dd=days.find(d=>d.iso===p.day);
-      const tags=[p.type&&`<span class="pill">${esc(p.type)}</span>`,p.price&&`<span class="pill">${esc(p.price)}</span>`,p.bestFor&&`<span class="pill">${esc(p.bestFor)}</span>`,p.bestTime&&`<span class="pill warn">${icon('sun',12)} ${esc(p.bestTime)}</span>`,p.reservation&&`<span class="pill ${p.reservation==='Yes'?'blue':''}">${p.reservation==='Yes'?'Reservation needed':esc(p.reservation)}</span>`,dd&&`<span class="pill ok">${dd.lab}</span>`].filter(Boolean).join('');
+      const tags=[p.type&&`<span class="pill">${esc(p.type)}</span>`,p.price&&`<span class="pill">${esc(p.price)}</span>`,p.bestFor&&`<span class="pill">${esc(p.bestFor)}</span>`,p.bestTime&&`<span class="pill warn">${icon('sun',12)} ${esc(p.bestTime)}</span>`,p.reservation&&`<span class="pill ${p.reservation==='Yes'?'blue':''}">${p.reservation==='Yes'?'Reservation needed':esc(p.reservation)}</span>`,dd&&`<span class="pill ok">${fmtD(dd.iso,{month:'short',day:'numeric'})}</span>`].filter(Boolean).join('');
       return `<div class="card placec"><div class="row" style="align-items:flex-start"><span class="lc" style="padding:0"><span class="ic" style="--tt:${K.t};--tc:${K.c}">${icon(K.i,18)}</span></span><div class="grow"><div class="ttl" style="font-weight:750;font-size:16px">${esc(p.title||p.name)}</div>${p.title&&p.name?`<div class="placename">${icon('pin',13)} ${esc(p.name)}${p.area?` <span class="muted">· ${esc(p.area)}</span>`:''}</div>`:`<div class="muted small">${esc(p.area||'')}</div>`}</div>${S.readonly?'':`<button class="ibtn" style="width:34px;height:34px" data-edit="places" data-id="${esc(p.id)}" aria-label="Edit">${icon('edit',15)}</button>`}</div>
       ${tags?`<div class="tags">${tags}</div>`:''}${p.notes?`<div class="small" style="margin-top:8px;color:#4C4659">${esc(p.notes)}</div>`:''}
       ${p.address?`<a class="link small addr" style="margin-top:8px" href="${esc(mapHref(p,p.name||p.title))}" target="_blank" rel="noopener">${icon('pin',13)} <span>${esc(p.address)}</span></a>`:''}
@@ -1033,7 +1048,7 @@ function filterBar(F,{collapsible}={}){
   const types=Object.keys(RCATS).filter(c=>all.some(r=>rcat(r)===c));
   const days=tripDays();
   const dates=[...new Set([...days.map(d=>d.iso),...all.flatMap(r=>[...resDates(r)])])].sort();
-  const dl=iso=>{const d=days.find(x=>x.iso===iso);return `${fmtD(iso)}${d?' · '+(d.out?'Travel day':'Day '+d.n):''}`};
+  const dl=iso=>{const d=days.find(x=>x.iso===iso);return `${fmtD(iso)}${d&&d.out?' · Travel day':''}`};
   const active=(F.P!=='All')+(F.T!=='All')+(!!F.D);
   const summary=[F.P==='All'?'Everyone':F.P,F.T==='All'?'All types':(RPLURAL[F.T]||F.T),F.D?fmtD(F.D,{month:'short',day:'numeric'}):'All dates'].join(' · ');
   const open=!collapsible||UI.homeFiltOpen;
@@ -1308,8 +1323,8 @@ function drawWallpaper(cv,{day,events,person,styleKey,W,H}){
   function paint(L){
     let y=top;x.textBaseline='alphabetic';x.textAlign='left';
     x.fillStyle=st.acc;x.font=`800 ${L.fEye}px "Plus Jakarta Sans"`;
-    const eye=`${day.lab.toUpperCase()}  ·  ${fmtD(day.iso,{weekday:'short',month:'short',day:'numeric'}).toUpperCase()}`;
-    if('letterSpacing' in x){x.letterSpacing=`${4*u*L.s}px`}x.fillText(eye,X,y+L.fEye);if('letterSpacing' in x)x.letterSpacing='0px';
+    const eye=(day.title?fmtD(day.iso,{weekday:'short',month:'short',day:'numeric'}):((S.trip.title||'Bangkok')+' trip'))+(day.out?'  ·  travel day':'');const eyeU=eye.toUpperCase();
+    if('letterSpacing' in x){x.letterSpacing=`${4*u*L.s}px`}x.fillText(eyeU,X,y+L.fEye);if('letterSpacing' in x)x.letterSpacing='0px';
     y+=L.fEye*1.6;
     x.fillStyle=st.ink;x.font=`600 ${L.fTitle}px Fraunces`;L.tl.forEach(l=>{y+=L.fTitle*1.0;x.fillText(l,X,y)});y+=L.fTitle*.05;
     if(L.sl.length){y+=12*u*L.s;x.fillStyle=st.muted;x.font=`500 ${L.fSum}px "Plus Jakarta Sans"`;L.sl.forEach(l=>{y+=L.fSum*1.3;x.fillText(l,X,y)})}
@@ -1348,7 +1363,7 @@ function openSheet(html,onMount){
 function closeSheet(now){const w=$('#sheetWrap');if(!w)return;document.body.style.overflow='';if(now){w.remove();return}w.classList.remove('open');setTimeout(()=>w.remove(),200)}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('.viewer'))$('.viewer').remove();else closeSheet()}});
 
-function dayOpts(){return[['','Not scheduled'],...tripDays().map(d=>[d.iso,`${d.lab} · ${fmtD(d.iso)}`])]}
+function dayOpts(){return[['','Not scheduled'],...tripDays().map(d=>[d.iso,`${fmtD(d.iso)}${d.out?' · Travel day':''}`])]}
 const SCHEMA={
   events:{name:'plan item',fields:()=>[
     {k:'title',label:'Activity',req:1,ph:'e.g. Temple morning'},
@@ -1578,12 +1593,12 @@ function openCopyDay(iso){
   const evs=S.events.filter(e=>e.date===iso).sort(byTime);
   const meta=S.days.find(x=>x.id===iso);
   const targets=days.filter(x=>x.iso!==iso);
-  openSheet(`<div class="shead"><div><div class="eyebrow">${esc(d.lab)} · ${fmtD(iso)}</div><h3>Copy this day</h3></div><button class="ibtn" data-close>${icon('x',18)}</button></div>
+  openSheet(`<div class="shead"><div><div class="eyebrow">${fmtD(iso)}</div><h3>Copy this day</h3></div><button class="ibtn" data-close>${icon('x',18)}</button></div>
   ${evs.length?`<p class="muted" style="margin:-4px 0 12px">Pick what to copy and which day to copy it to. Bookings and flights aren’t copied. Duplicate those from Bookings.</p>
   <form class="f">
     <div class="fld"><span>Items to copy</span><div class="card" style="box-shadow:none">${evs.map(e=>`<label class="row" style="padding:10px 12px;border-bottom:1px solid var(--line);gap:10px"><input type="checkbox" checked data-ev="${esc(e.id)}" style="width:20px;height:20px;accent-color:var(--jade)"><b style="width:60px;font-size:13px">${esc(fmtT(e.time)||'—')}</b><span class="grow">${esc(e.title)}</span></label>`).join('')}</div></div>
     <label class="fld chk" style="padding-top:0"><input type="checkbox" name="meta" ${meta&&(meta.title||meta.summary)?'checked':''}><span>Also copy the day title & summary</span></label>
-    <div class="fld"><span>Copy to</span><div class="chips" data-multi="to">${targets.map(x=>`<button type="button" class="pchip plain" data-p="${x.iso}">${esc(x.out?'Travel':'Day '+x.n)} · ${esc(fmtD(x.iso,{month:'short',day:'numeric'}))}</button>`).join('')}</div><small>You can pick more than one day.</small></div>
+    <div class="fld"><span>Copy to</span><div class="chips" data-multi="to">${targets.map(x=>`<button type="button" class="pchip plain" data-p="${x.iso}">${esc(fmtD(x.iso))}</button>`).join('')}</div><small>You can pick more than one day.</small></div>
     <div class="factions"><button class="btn gold">Copy</button></div>
   </form>`:`<div class="card empty"><b>Nothing to copy yet</b>Add activities to this day first.</div>`}`,sh=>{
     $('[data-close]',sh).onclick=()=>closeSheet();bindChips(sh);
@@ -1601,7 +1616,7 @@ function openCopyDay(iso){
 function openDay(iso){
   const d=tripDays().find(x=>x.iso===iso)||{iso,title:'',summary:''};const m=S.days.find(x=>x.id===iso)||{};
   const auto=(()=>{const keep=m.tz;const tmp={...m,tz:''};const i=S.days.indexOf(m);if(i>=0)S.days[i]=tmp;const r=dayTzInfo(iso,'Everyone');if(i>=0)S.days[i]=m;return r.tz})();
-  openSheet(`<div class="shead"><h3>${d.lab||'Day'}</h3><button class="ibtn" data-close>${icon('x',18)}</button></div><p class="muted" style="margin:-6px 0 14px">${fmtD(iso,{weekday:'long',month:'long',day:'numeric'})}</p>
+  openSheet(`<div class="shead"><h3>Edit day</h3><button class="ibtn" data-close>${icon('x',18)}</button></div><p class="muted" style="margin:-6px 0 14px">${fmtD(iso,{weekday:'long',month:'long',day:'numeric'})}</p>
   <form class="f"><label class="fld"><span>Day title</span><input name="title" value="${esc(d.title)}" placeholder="e.g. Old City Temples"></label><label class="fld"><span>Summary</span><textarea name="summary" placeholder="One line for the group">${esc(d.summary)}</textarea></label>
   <label class="fld"><span>Time zone for this day</span><select name="tz"><option value="">Automatic${auto?' · '+esc(tzCity(auto))+' ('+esc(tzLabel(auto,iso))+')':''}</option>${TZS.map(([z,n])=>`<option value="${z}" ${m.tz===z?'selected':''}>${esc(n)} · ${esc(tzLabel(z,iso))}</option>`).join('')}</select>
     <small>Automatic uses the trip’s time zone (${esc(tzCity(tripTz()))}) during the trip, and follows flights on travel days.</small></label>
@@ -1807,7 +1822,7 @@ async function openWallpaper(iso){
   if(!WP_STYLES[st.style]||(st.style==='photo'&&!WP_PHOTO))st.style='night';if(!WP_SIZES[st.size])st.size=0;
   try{await Promise.all([document.fonts.load('600 80px Fraunces'),document.fonts.load('700 40px "Plus Jakarta Sans"'),document.fonts.load('800 40px "Plus Jakarta Sans"'),document.fonts.load('500 40px "Plus Jakarta Sans"')])}catch(e){}
   const [,W,H]=WP_SIZES[st.size];
-  openSheet(`<div class="shead"><div><div class="eyebrow">${day.lab} · ${fmtD(iso)}</div><h3>Lock-screen wallpaper</h3></div><button class="ibtn" data-close>${icon('x',18)}</button></div>
+  openSheet(`<div class="shead"><div><div class="eyebrow">${fmtD(iso)}</div><h3>Lock-screen wallpaper</h3></div><button class="ibtn" data-close>${icon('x',18)}</button></div>
   <div class="wp-prev" id="wpp" style="--ar:${W}/${H}"><canvas id="wpc"></canvas><div class="wp-lock" id="wpl"><div class="d">${fmtD(iso,{weekday:'long',month:'long',day:'numeric'})}</div><div class="tm">9:41</div><div class="btns"><i></i><i></i></div></div></div>
   <div class="row" style="justify-content:center;margin:10px 0 2px"><label class="small muted row" style="gap:6px"><input type="checkbox" id="wpov" checked style="accent-color:var(--jade)"> Show lock-screen clock</label></div>
   <div class="fld" style="margin-top:12px"><span>Who is it for?</span><div class="chips" data-single id="wpPeople">${['Everyone',...travelers()].map(p=>`<button type="button" class="pchip ${p==='Everyone'?'plain':''} ${st.person===p?'on':''}" data-p="${esc(p)}">${p==='Everyone'?icon('users',15):avatar(p,22)} ${esc(p)}</button>`).join('')}</div><small>Personal versions only show the plans that person is part of.</small></div>
@@ -1832,7 +1847,7 @@ async function openWallpaper(iso){
     $('#wpov',sh).onchange=e=>$('#wpl',sh).style.display=e.target.checked?'':'none';
     $('#wpPeople',sh).addEventListener('chipchange',()=>{st.person=($('#wpPeople .pchip.on',sh)||{}).dataset?.p||'Everyone';tiles();redraw()});
     $('#wpSize',sh).onchange=e=>{st.size=+e.target.value;LS.set('bkk-wpmodel',WP_SIZES[st.size][0]);redraw()};
-    const fname=()=>`bangkok-${day.lab.toLowerCase().replace(/ /g,'-')}-${day.iso}${st.person!=='Everyone'?'-'+st.person.toLowerCase().replace(/[^a-z0-9]+/g,'-'):''}.png`;
+    const fname=()=>`bangkok-${day.iso}${st.person!=='Everyone'?'-'+st.person.toLowerCase().replace(/[^a-z0-9]+/g,'-'):''}.png`;
     $('#wpView',sh).onclick=()=>showViewer(cv.toDataURL('image/png'));
     $('#wpSave',sh).onclick=()=>{cv.toBlob(async blob=>{
       if(!blob){toast('Could not create the image');return}
@@ -1852,8 +1867,8 @@ document.addEventListener('click',e=>{
   if(e.target.closest('[data-stop]'))return; // let links open
   const cp=e.target.closest('[data-copy]');if(cp){e.preventDefault();e.stopPropagation();const s=cp.dataset.copy;(navigator.clipboard?navigator.clipboard.writeText(s):Promise.reject()).then(()=>toast('Copied')).catch(()=>toast(s));return}
   const pm=e.target.closest('[data-phshow]');if(pm){e.stopPropagation();const r=S.reservations.find(x=>x.id===pm.dataset.phshow)||S.docs.find(x=>x.id===pm.dataset.phshow);const im=e.target.closest('img');const list=(r&&r.photos)||[];const i=im?[...pm.querySelectorAll('img')].indexOf(im):0;if(list[i])showPhoto(photoSrc(list[i]));return}
-  const g=e.target.closest('[data-go]');if(g){if(g.dataset.day){UI.day=g.dataset.day;UI._scrollChip=true}go(g.dataset.go);return}
-  const dp=e.target.closest('[data-day-pick]');if(dp){UI.day=dp.dataset.dayPick;go('plan');return}
+  const g=e.target.closest('[data-go]');if(g){if(g.dataset.day){UI.day=g.dataset.day;LS.set('bkk-day',UI.day)}go(g.dataset.go);return}
+  const dp=e.target.closest('[data-day-pick]');if(dp){UI.day=dp.dataset.dayPick;LS.set('bkk-day',UI.day);go('plan');return}
   const fl=e.target.closest('[data-filter]');if(fl){UI.filter=fl.dataset.filter;LS.set('bkk-filter',UI.filter);render();return}
   const ex=e.target.closest('[data-extab]');if(ex){UI.exTab=ex.dataset.extab;render();return}
   const it=e.target.closest('[data-infotab]');if(it){UI.infoTab=it.dataset.infotab;render();return}
@@ -1896,6 +1911,11 @@ document.addEventListener('click',e=>{
   else if(act==='placeToDay'){const p=S.places.find(z=>z.id===a.dataset.id);if(p)openForm('events',null,{title:p.title||p.name,place:p.name||'',area:p.area,address:p.address||'',mapLink:p.mapLink||'',date:p.day||UI.day||'',type:p.kind==='Restaurant'?'Food':p.kind==='Photo spot'?'Sightseeing':'Activity'})}
 });
 document.addEventListener('change',e=>{const d=e.target.closest('[data-bkdate]');if(d){UI.bkDate=d.value;render()}});
+(()=>{let sx=0,sy=0,st=0,ok=false;
+  document.addEventListener('touchstart',e=>{if(UI.view!=='plan'||e.touches.length!==1||e.target.closest('.hscroll,.sheet-wrap,.gmap,input,textarea,select')){ok=false;return}ok=true;sx=e.touches[0].clientX;sy=e.touches[0].clientY;st=Date.now()},{passive:true});
+  document.addEventListener('touchend',e=>{if(!ok)return;ok=false;const t=e.changedTouches[0];const dx=t.clientX-sx,dy=t.clientY-sy;if(Math.abs(dx)<70||Math.abs(dx)<Math.abs(dy)*1.8||Date.now()-st>800)return;
+    const days=tripDays();const i=days.findIndex(x=>x.iso===UI.day);const nx=days[i+(dx<0?1:-1)];if(!nx)return;UI.day=nx.iso;LS.set('bkk-day',UI.day);UI._slide=dx<0?'l':'r';go('plan')},{passive:true});
+})();
 window.addEventListener('online',()=>render());window.addEventListener('offline',()=>render());
 window.addEventListener('resize',()=>{clearTimeout(window._rz);window._rz=setTimeout(()=>$$('canvas.sky').forEach(paintHeroSky),150)});
 document.fonts&&document.fonts.ready.then(()=>render());
