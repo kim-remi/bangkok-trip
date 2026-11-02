@@ -87,6 +87,10 @@ h2.pg{font-size:30px;margin:6px 0 2px}
 .seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.08)}
 .hscroll{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:4px 16px 8px;scroll-snap-type:x proximity}
 .hscroll::-webkit-scrollbar{display:none}
+.hres{gap:12px;align-items:stretch;scroll-snap-type:x mandatory}
+.hres>.hrc{flex:0 0 86%;max-width:420px;scroll-snap-align:center;margin:0}
+.hres>.hrc:only-child{flex-basis:100%}
+.seg button svg{vertical-align:-3px;margin-right:2px}
 
 /* hero */
 .hero{position:relative;border-radius:28px;overflow:hidden;color:#FFF7E8;background:radial-gradient(120% 90% at 85% 0%,#7A2C5E 0%,rgba(122,44,94,0) 55%),linear-gradient(165deg,#120F35 0%,#2A1B57 60%,#55204F 100%);padding:20px 20px 0;min-height:270px}
@@ -488,7 +492,7 @@ const DEFAULT_TRIP={title:'Bangkok',subtitle:'',start:'',end:'',travelers:[],bas
 const COLS=['events','days','places','reservations','docs','packing','expenses','payments','albums'];
 const S={trip:{...DEFAULT_TRIP},mode:'loading',ready:false,stale:false,readonly:false};
 COLS.forEach(c=>S[c]=[]);
-const UI={view:'home',day:LS.get('bkk-day',null),exTab:'Activity',infoTab:'bookings',filter:LS.get('bkk-filter','Everyone'),me:LS.get('bkk-me',''),cur:LS.get('bkk-cur',''),pkOwner:'All'};
+const UI={view:'home',day:LS.get('bkk-day',null),exTab:'Activity',infoTab:'bookings',filter:LS.get('bkk-filter','Everyone'),me:LS.get('bkk-me',''),cur:LS.get('bkk-cur',''),pkOwner:'All',homeRes:LS.get('bkk-homeres','Flight')};
 let DB=null;
 
 const travelers=()=>Array.isArray(S.trip.travelers)?S.trip.travelers.filter(Boolean):[];
@@ -782,6 +786,7 @@ function draw(){if(GM&&UI.view==='explore'&&UI.exTab==='Map'&&$('#gmap'))GM.keep
   $$('canvas.sky').forEach(c=>paintHeroSky(c));
   if(UI._slide&&UI.view==='plan'){const el=$('.dayhead');const tl=$('.tl');[el,tl].forEach(x=>x&&x.animate([{opacity:.3,transform:`translateX(${UI._slide==='l'?40:-40}px)`},{opacity:1,transform:'none'}],{duration:220,easing:'ease-out'}));UI._slide=null}
   $$('.fl-sc').forEach(sc=>{const on=$('.pchip.on',sc);if(!on)return;const a=on.getBoundingClientRect(),b=sc.getBoundingClientRect();if(a.right>b.right||a.left<b.left)sc.scrollLeft+=(a.left-b.left)-(b.width-a.width)/2});
+  $$('.hres').forEach(sc=>{if(sc._done&&!UI._resScroll)return;sc._done=true;const u=$('[data-up]',sc);sc.scrollLeft=u?u.offsetLeft-sc.firstElementChild.offsetLeft:0});UI._resScroll=false;
   {const strip=$('#dayStrip'),on=$('#dayStrip .dchip.on');if(strip&&on){const a=on.getBoundingClientRect(),b=strip.getBoundingClientRect();strip.scrollLeft+=(a.left-b.left)-(b.width-a.width)/2}}
 }
 
@@ -830,8 +835,12 @@ function vHome(){
       <div class="sec"><h3>Trip overview</h3>${S.readonly?'':`<button class="link" data-act="settings">${icon('edit',14)} Edit</button>`}</div>
       <div class="card pad">${(t.overview||[]).length?`<ul style="margin:0;padding-left:18px;display:grid;gap:6px">${t.overview.map(o=>`<li>${esc(o)}</li>`).join('')}</ul>`:'<span class="muted">Add highlights in settings.</span>'}
         ${t.tips?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)"><div class="eyebrow" style="margin-bottom:4px">Good to know</div><div class="small" style="color:#4C4659">${esc(t.tips)}</div></div>`:''}</div>
-      <div class="sec"><h3>${fActive?(F.T!=='All'?esc(RPLURAL[F.T]||F.T):'Bookings'):'Flights & stay'}</h3><button class="link" data-go="info">All bookings ${icon('arrow',15)}</button></div>
-      <div class="card">${stays.map(resRow).join('')||`<div class="empty small">${fActive?'No bookings match your filters.':'No flights or hotel added yet.'}</div>`}</div>
+      <div class="sec"><h3>${fActive?(F.T!=='All'?esc(RPLURAL[F.T]||F.T):'Bookings'):'Flights & stays'}</h3><button class="link" data-go="info">All bookings ${icon('arrow',15)}</button></div>
+      ${(()=>{const tab=UI.homeRes==='Hotel'?'Hotel':'Flight';const nF=stays.filter(r=>r.category==='Flight').length,nH=stays.filter(r=>r.category==='Hotel').length;
+        const list=fActive?stays:stays.filter(r=>r.category===tab);const t=todayIso();const up=list.findIndex(r=>(r.endDate||r.arrDate||r.date||'9')>=t);
+        return `${fActive?'':`<div class="seg" style="margin-bottom:10px"><button class="${tab==='Flight'?'on':''}" data-homeres="Flight">${icon('plane',15)} Flights${nF?` · ${nF}`:''}</button><button class="${tab==='Hotel'?'on':''}" data-homeres="Hotel">${icon('bed',15)} Stays${nH?` · ${nH}`:''}</button></div>`}
+        ${list.length?`<div class="hscroll hres">${list.map((r,i)=>`<div class="card hrc" ${i===up?'data-up':''}>${resRow(r)}</div>`).join('')}</div>${list.length>1?`<div class="muted small" style="text-align:center;margin-top:2px">${list.length} ${fActive?'bookings':tab==='Flight'?'flights':'stays'} · swipe to see more</div>`:''}`
+        :`<div class="card"><div class="empty small">${fActive?'No bookings match your filters.':tab==='Flight'?'No flights added yet.':'No stays added yet.'}</div></div>`}`})()}
       <div class="sec"><h3>Money</h3><button class="link" data-go="money">Expenses ${icon('arrow',15)}</button></div>
       ${moneyMini()}
     </div>
@@ -1922,6 +1931,7 @@ document.addEventListener('click',e=>{
   if(e.target.closest('[data-bkclear]')){UI.bkPerson='All';UI.bkType='All';UI.bkDate='';render();return}
   const po=e.target.closest('[data-pkowner]');if(po){UI.pkOwner=po.dataset.pkowner;render();return}
   const cu=e.target.closest('[data-cur]');if(cu){UI.cur=cu.dataset.cur;LS.set('bkk-cur',UI.cur);render();return}
+  const hr=e.target.closest('[data-homeres]');if(hr){UI.homeRes=hr.dataset.homeres;LS.set('bkk-homeres',UI.homeRes);UI._resScroll=true;render();return}
   const me=e.target.closest('[data-me]');if(me){UI.me=UI.me===me.dataset.me?'':me.dataset.me;LS.set('bkk-me',UI.me);render();return}
   const pk=e.target.closest('[data-pack]');if(pk){const p=S.packing.find(x=>x.id===pk.dataset.pack);if(p&&!S.readonly)Store.put('packing',{...p,packed:!p.packed});return}
   const d2p=e.target.closest('[data-doc2pack]');if(d2p){e.stopPropagation();if(S.readonly){toast('View-only access');return}const id=d2p.dataset.doc2pack;
